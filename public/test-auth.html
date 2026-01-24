@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CMS Auth Diagnostics</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .test {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; border-color: #c3e6cb; }
+        .error { background: #f8d7da; border-color: #f5c6cb; }
+        .pending { background: #fff3cd; border-color: #ffeeba; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>CMS Authentication Diagnostics</h1>
+    
+    <div id="backend-test" class="test pending">
+        <h3>1. Backend Connection Test</h3>
+        <button onclick="testBackend()">Test Backend</button>
+        <div id="backend-result"></div>
+    </div>
+
+    <div id="signup-test" class="test pending">
+        <h3>2. Create Test User</h3>
+        <button onclick="testSignup()">Create User</button>
+        <div id="signup-result"></div>
+    </div>
+
+    <div id="login-test" class="test pending">
+        <h3>3. Test Direct Login</h3>
+        <button onclick="testLogin()">Test Login</button>
+        <div id="login-result"></div>
+    </div>
+
+    <div id="nextauth-test" class="test pending">
+        <h3>4. Test NextAuth Verify</h3>
+        <button onclick="testNextAuthVerify()">Test NextAuth</button>
+        <div id="nextauth-result"></div>
+    </div>
+
+    <script>
+        async function testBackend() {
+            const resultDiv = document.getElementById('backend-result');
+            const testDiv = document.getElementById('backend-test');
+            
+            try {
+                resultDiv.innerHTML = '<p>Testing...</p>';
+                const response = await fetch('http://localhost:4000/api/health');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testDiv.className = 'test success';
+                    resultDiv.innerHTML = `
+                        <p>✓ Backend is running!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    throw new Error('Backend returned error');
+                }
+            } catch (error) {
+                testDiv.className = 'test error';
+                resultDiv.innerHTML = `<p>✗ Backend connection failed: ${error.message}</p>`;
+            }
+        }
+
+        async function testSignup() {
+            const resultDiv = document.getElementById('signup-result');
+            const testDiv = document.getElementById('signup-test');
+            
+            try {
+                resultDiv.innerHTML = '<p>Creating user...</p>';
+                const response = await fetch('http://localhost:4000/api/users/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'Test123!',
+                        name: 'Test User'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testDiv.className = 'test success';
+                    resultDiv.innerHTML = `
+                        <p>✓ User created successfully!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else if (response.status === 409) {
+                    testDiv.className = 'test success';
+                    resultDiv.innerHTML = `<p>✓ User already exists (this is ok)</p>`;
+                } else {
+                    throw new Error(data.message || 'Signup failed');
+                }
+            } catch (error) {
+                testDiv.className = 'test error';
+                resultDiv.innerHTML = `<p>✗ Signup failed: ${error.message}</p>`;
+            }
+        }
+
+        async function testLogin() {
+            const resultDiv = document.getElementById('login-result');
+            const testDiv = document.getElementById('login-test');
+            
+            try {
+                resultDiv.innerHTML = '<p>Testing login...</p>';
+                const response = await fetch('http://localhost:4000/api/users/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'Test123!'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testDiv.className = 'test success';
+                    resultDiv.innerHTML = `
+                        <p>✓ Login successful!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    throw new Error(data.message || 'Login failed');
+                }
+            } catch (error) {
+                testDiv.className = 'test error';
+                resultDiv.innerHTML = `<p>✗ Login failed: ${error.message}</p>`;
+            }
+        }
+
+        async function testNextAuthVerify() {
+            const resultDiv = document.getElementById('nextauth-result');
+            const testDiv = document.getElementById('nextauth-test');
+            
+            try {
+                resultDiv.innerHTML = '<p>Testing NextAuth verify...</p>';
+                const response = await fetch('/api/auth/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'test@example.com',
+                        password: 'Test123!'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    testDiv.className = 'test success';
+                    resultDiv.innerHTML = `
+                        <p>✓ NextAuth verify successful!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                        <p><strong>You can now try logging in at <a href="/login">/login</a></strong></p>
+                    `;
+                } else {
+                    throw new Error(data.error || 'Verify failed');
+                }
+            } catch (error) {
+                testDiv.className = 'test error';
+                resultDiv.innerHTML = `<p>✗ NextAuth verify failed: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-run first test on load
+        window.addEventListener('load', () => {
+            testBackend();
+        });
+    </script>
+</body>
+</html>
