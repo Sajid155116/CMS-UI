@@ -39,10 +39,10 @@ const ItemSchema = new Schema<IItemDocument>(
 // Transform _id to id
 ItemSchema.set('toJSON', {
   virtuals: true,
-  transform: (doc, ret) => {
+  transform: (doc, ret: any) => {
     ret.id = ret._id.toString();
-    delete ret._id;
-    delete ret.__v;
+    delete (ret as any)._id;
+    delete (ret as any).__v;
     return ret;
   },
 });

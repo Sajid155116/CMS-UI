@@ -37,9 +37,9 @@ UserSchema.set('toJSON', {
   virtuals: true,
   transform: (doc, ret) => {
     ret.id = ret._id.toString();
-    delete ret._id;
-    delete ret.__v;
-    delete ret.password; // Never include password in JSON
+    delete (ret as any)._id;
+    delete (ret as any).__v;
+    delete (ret as any).password; // Never include password in JSON
     return ret;
   },
 });
