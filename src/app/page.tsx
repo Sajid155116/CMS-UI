@@ -1,4 +1,7 @@
 export default function HomePage() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+  const apiDocsUrl = apiUrl.replace('/api', '/api/docs');
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-24">
       <div className="text-center">
@@ -16,7 +19,7 @@ export default function HomePage() {
             Content Management
           </a>
           <a
-            href="http://localhost:4000/api/docs"
+            href={apiDocsUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
