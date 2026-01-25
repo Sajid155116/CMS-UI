@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+import bcrypt from 'bcrypt';
+import dbConnect from '@/lib/mongodb';
+import { User } from '@/models/User';
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,28 +16,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call NestJS backend to verify credentials
-    console.log('[Auth Verify] Calling backend:', `${API_URL}/users/login`);
-    const response = await fetch(`${API_URL}/users/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    await dbConnect();
 
-    console.log('[Auth Verify] Backend response status:', response.status);
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('[Auth Verify] Backend error:', error);
+    // Find user
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    
+    if (!user) {
+      console.error('[Auth Verify] User not found');
       return NextResponse.json(
-        { error: error.message || 'Invalid credentials' },
+        { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
 
-    const user = await response.json();
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    
+    if (!isPasswordValid) {
+      console.error('[Auth Verify] Invalid password');
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      );
+    }
+
     console.log('[Auth Verify] Login successful for user:', user.email);
-    return NextResponse.json(user);
+    
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    });
   } catch (error) {
     console.error('[Auth Verify] Exception:', error);
     return NextResponse.json(

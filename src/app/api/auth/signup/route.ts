@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+import bcrypt from 'bcrypt';
+import dbConnect from '@/lib/mongodb';
+import { User } from '@/models/User';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,23 +14,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call NestJS backend to create user
-    const response = await fetch(`${API_URL}/users/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
-    });
+    await dbConnect();
 
-    if (!response.ok) {
-      const error = await response.json();
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
       return NextResponse.json(
-        { error: error.message || 'Failed to create account' },
-        { status: response.status }
+        { error: 'User already exists' },
+        { status: 400 }
       );
     }
 
-    const user = await response.json();
-    return NextResponse.json(user, { status: 201 });
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const user = await User.create({
+      email: email.toLowerCase(),
+      password: hashedPassword,
+      name,
+      preferences: { viewMode: 'grid' },
+    });
+
+    return NextResponse.json(
+      {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Signup error:', error);
     return NextResponse.json(
