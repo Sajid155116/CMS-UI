@@ -27,13 +27,15 @@ export async function GET(request: NextRequest) {
     console.log('[Preferences GET] All cookies:', cookies.map(c => c.name).join(', '));
     
     const sessionCookie = cookies.find(c => 
+      c.name === 'authjs.session-token' ||
+      c.name === '__Secure-authjs.session-token' ||
       c.name === 'next-auth.session-token' ||
-      c.name === '__Secure-next-auth.session-token' ||
-      c.name.includes('authjs.session-token')
+      c.name === '__Secure-next-auth.session-token'
     );
 
     if (!sessionCookie) {
       console.error('[Preferences GET] No session cookie found');
+      console.error('[Preferences GET] Available cookies:', cookies);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -85,13 +87,15 @@ export async function PATCH(request: NextRequest) {
     // Get all cookies and find session token
     const cookies = request.cookies.getAll();
     const sessionCookie = cookies.find(c => 
+      c.name === 'authjs.session-token' ||
+      c.name === '__Secure-authjs.session-token' ||
       c.name === 'next-auth.session-token' ||
-      c.name === '__Secure-next-auth.session-token' ||
-      c.name.includes('authjs.session-token')
+      c.name === '__Secure-next-auth.session-token'
     );
 
     if (!sessionCookie) {
       console.error('[Preferences PATCH] No session cookie found');
+      console.error('[Preferences PATCH] Available cookies:', cookies);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 

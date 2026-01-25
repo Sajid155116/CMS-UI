@@ -29,7 +29,7 @@ const UploadContext = createContext<UploadContextType | undefined>(undefined);
 
 export function UploadProvider({ children }: { children: ReactNode }) {
   const [uploads, setUploads] = useState<UploadTask[]>([]);
-  const onUploadCompleteRef = useRef<((item: Item) => void) | undefined>();
+  const onUploadCompleteRef = useRef<((item: Item) => void) | undefined>(undefined);
 
   const setOnUploadComplete = useCallback((callback: (item: Item) => void) => {
     onUploadCompleteRef.current = callback;
