@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { getSession } from 'next-auth/react';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -48,13 +49,20 @@ class ApiClient {
 
   private async getAuthToken(): Promise<string | null> {
     if (typeof window !== 'undefined') {
-      // Try to get NextAuth session token from cookie
-      const cookies = document.cookie.split(';');
-      for (const cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'next-auth.session-token' || name === '__Secure-next-auth.session-token') {
-          return value;
+      try {
+        const session = await getSession();
+        // NextAuth JWT is available as an encoded token
+        // We need to get it from the cookie
+        const cookies = document.cookie.split(';');
+        for (const cookie of cookies) {
+          const [name, value] = cookie.trim().split('=');
+          // NextAuth v5 uses authjs.session-token
+          if (name === 'authjs.session-token' || name === '__Secure-authjs.session-token') {
+            return value;
+          }
         }
+      } catch (error) {
+        console.error('Error getting auth token:', error);
       }
     }
     return null;
