@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Item, ItemType } from '@/types/items';
 import { itemsApi } from '@/lib/items-api';
 import { formatDate } from '@/lib/utils';
+import { VideoPreviewModal } from './VideoPreviewModal';
 
 interface FileListProps {
   items: Item[];
@@ -18,6 +19,7 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
   const [editName, setEditName] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number } | null>(null);
+  const [videoPreview, setVideoPreview] = useState<{ url: string; name: string } | null>(null);
 
   const handleDownload = async (item: Item) => {
     if (item.type === ItemType.FOLDER) return;
@@ -49,9 +51,15 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
       const mimeType = item.mimeType || '';
       const extension = item.name.split('.').pop()?.toLowerCase() || '';
       
-      // Direct preview for images, PDFs, text, and video
+      // Video files - show in modal player
+      if (mimeType.startsWith('video/') || ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv'].includes(extension)) {
+        setVideoPreview({ url, name: item.name });
+        return;
+      }
+      
+      // Direct preview for images, PDFs, text, and audio
       const directPreviewTypes = [
-        'image/', 'application/pdf', 'text/', 'video/', 'audio/'
+        'image/', 'application/pdf', 'text/', 'audio/'
       ];
       
       const canPreviewDirectly = directPreviewTypes.some(type => mimeType.startsWith(type));
@@ -226,7 +234,15 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
   // Grid View
   if (viewMode === 'grid') {
     return (
-      <div className="p-6">
+      <>
+        {videoPreview && (
+          <VideoPreviewModal
+            videoUrl={videoPreview.url}
+            fileName={videoPreview.name}
+            onClose={() => setVideoPreview(null)}
+          />
+        )}
+        <div className="p-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {items.map((item) => (
             <div
@@ -327,6 +343,7 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
           ))}
         </div>
       </div>
+      </>
     );
   }
 
