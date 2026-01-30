@@ -3,13 +3,20 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
+import { useUser } from '@/contexts/UserContext';
 
 export default function SignupPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signup, isAuthenticated } = useUser();
+
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    router.push('/files');
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,36 +35,10 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || 'Failed to create account');
-        return;
-      }
-
-      // Auto sign in after successful signup
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
-
-      if (result?.ok) {
-        router.push('/files');
-        router.refresh();
-      }
-    } catch (error) {
-      setError('An error occurred. Please try again.');
+      await signup(formData.email, formData.password, formData.name);
+      // Router.push is handled in signup function
+    } catch (error: any) {
+      setError(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }

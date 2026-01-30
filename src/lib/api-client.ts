@@ -1,13 +1,14 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { getSession } from 'next-auth/react';
 
 class ApiClient {
   private client: AxiosInstance;
+  private getAccessToken: (() => string | null) | null = null;
+  private onTokenExpired: (() => Promise<string | null>) | null = null;
 
   constructor() {
     this.client = axios.create({
       baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api',
-      timeout: 10000,
+      timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -16,14 +17,25 @@ class ApiClient {
     this.setupInterceptors();
   }
 
+  // Call this from your UserContext to inject token getter and refresh function
+  public initialize(
+    getAccessToken: () => string | null,
+    onTokenExpired: () => Promise<string | null>
+  ) {
+    this.getAccessToken = getAccessToken;
+    this.onTokenExpired = onTokenExpired;
+  }
+
   private setupInterceptors() {
-    // Request interceptor
+    // Request interceptor - add access token
     this.client.interceptors.request.use(
       async (config) => {
-        // Add auth token if available
-        const token = await this.getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // Get access token from context
+        if (this.getAccessToken) {
+          const token = this.getAccessToken();
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+          }
         }
         return config;
       },
@@ -32,40 +44,35 @@ class ApiClient {
       }
     );
 
-    // Response interceptor
+    // Response interceptor - handle token expiration
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response?.status === 401) {
-          // Handle unauthorized access - redirect to login
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+        const originalRequest = error.config;
+
+        // If 401 and we haven't retried yet, try to refresh token
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+
+          if (this.onTokenExpired) {
+            try {
+              const newToken = await this.onTokenExpired();
+              if (newToken) {
+                // Retry original request with new token
+                originalRequest.headers.Authorization = `Bearer ${newToken}`;
+                return this.client(originalRequest);
+              }
+            } catch (refreshError) {
+              console.error('Token refresh failed:', refreshError);
+              // Logout will be handled in UserContext
+              return Promise.reject(refreshError);
+            }
           }
         }
+
         return Promise.reject(error);
       }
     );
-  }
-
-  private async getAuthToken(): Promise<string | null> {
-    if (typeof window !== 'undefined') {
-      try {
-        const session = await getSession();
-        // NextAuth JWT is available as an encoded token
-        // We need to get it from the cookie
-        const cookies = document.cookie.split(';');
-        for (const cookie of cookies) {
-          const [name, value] = cookie.trim().split('=');
-          // NextAuth v5 uses authjs.session-token
-          if (name === 'authjs.session-token' || name === '__Secure-authjs.session-token') {
-            return value;
-          }
-        }
-      } catch (error) {
-        console.error('Error getting auth token:', error);
-      }
-    }
-    return null;
   }
 
   public async get<T = any>(

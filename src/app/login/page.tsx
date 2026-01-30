@@ -1,15 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useUser } from '@/contexts/UserContext';
 
 export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login, isAuthenticated } = useUser();
+
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    router.push('/files');
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,20 +24,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn('credentials', {
-        email: formData.email,
-        password: formData.password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError('Invalid email or password');
-      } else if (result?.ok) {
-        router.push('/files');
-        router.refresh();
-      }
-    } catch (error) {
-      setError('An error occurred. Please try again.');
+      await login(formData.email, formData.password);
+      // Router.push is handled in login function
+    } catch (error: any) {
+      setError(error.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }

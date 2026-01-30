@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { useUser } from '@/contexts/UserContext';
 import { Item, ItemType } from '@/types/items';
 import { itemsApi } from '@/lib/items-api';
 import { FileList } from '@/components/file-manager/FileList';
@@ -12,7 +13,8 @@ import { UploadManager } from '@/components/file-manager/UploadManager';
 import { UploadProvider, useUpload } from '@/contexts/UploadContext';
 
 function FileManagerContent() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const { user, logout, isAuthenticated, loading: authLoading } = useUser();
   const [items, setItems] = useState<Item[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [breadcrumbs, setBreadcrumbs] = useState<Item[]>([]);
@@ -23,8 +25,17 @@ function FileManagerContent() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const { setOnUploadComplete } = useUpload();
 
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
   // Load user preferences on mount
   useEffect(() => {
+    if (!isAuthenticated) return;
+    
     const loadPreferences = async () => {
       try {
         const response = await fetch('/api/users/preferences');
@@ -40,11 +51,8 @@ function FileManagerContent() {
         setViewMode('grid');
       }
     };
-
-    if (session) {
-      loadPreferences();
-    }
-  }, [session]);
+    loadPreferences();
+  }, [isAuthenticated]);
 
   // Save view mode preference when it changes (but not on initial load)
   useEffect(() => {
@@ -184,10 +192,10 @@ function FileManagerContent() {
                   className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
-                    {session?.user?.name?.[0]?.toUpperCase() || 'U'}
+                    {user?.name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                   </div>
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {session?.user?.name || session?.user?.email}
+                    {user?.name || user?.email}
                   </span>
                   <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -198,14 +206,14 @@ function FileManagerContent() {
                   <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                     <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {session?.user?.name}
+                        {user?.name}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {session?.user?.email}
+                        {user?.email}
                       </p>
                     </div>
                     <button
-                      onClick={() => signOut({ callbackUrl: '/login' })}
+                      onClick={() => logout()}
                       className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
                       Sign Out
