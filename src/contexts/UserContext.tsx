@@ -103,7 +103,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
       
-      // Create the user
+      // Create the user (now returns tokens immediately)
       const signupResponse = await fetch(`${apiUrl}/users/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,9 +117,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       const data = await signupResponse.json();
       
-      // Don't auto-login, user needs to verify email first
-      // Show success message about email verification
-      throw new Error(data.message || 'Please check your email to verify your account');
+      // Store tokens and user (auto-login after signup)
+      localStorage.setItem(TOKEN_KEY, data.accessToken);
+      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+
+      setAccessToken(data.accessToken);
+      setRefreshToken(data.refreshToken);
+      setUser(data.user);
+
+      router.push('/files');
     } catch (error: any) {
       console.error('Signup error:', error);
       throw error;

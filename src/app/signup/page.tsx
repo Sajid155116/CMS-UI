@@ -38,13 +38,9 @@ export default function SignupPage() {
 
     try {
       await signup(formData.email, formData.password, formData.name);
+      // Signup now auto-redirects to /files
     } catch (error: any) {
-      // If error message contains "verify" or "email", it's a success message
-      if (error.message && (error.message.includes('verify') || error.message.includes('email'))) {
-        setSuccess(error.message);
-      } else {
-        setError(error.message || 'Failed to create account');
-      }
+      setError(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
