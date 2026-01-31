@@ -24,6 +24,7 @@ interface UserContextType {
   signup: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<string | null>;
+  setTokens: (accessToken: string, refreshToken: string, user: User) => void;
   isAuthenticated: boolean;
 }
 
@@ -102,7 +103,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
       
-      // First create the user
+      // Create the user
       const signupResponse = await fetch(`${apiUrl}/users/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -114,12 +115,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
         throw new Error(error.message || 'Signup failed');
       }
 
-      // Then login
-      await login(email, password);
+      const data = await signupResponse.json();
+      
+      // Don't auto-login, user needs to verify email first
+      // Show success message about email verification
+      throw new Error(data.message || 'Please check your email to verify your account');
     } catch (error: any) {
       console.error('Signup error:', error);
       throw error;
     }
+  };
+
+  const setTokens = (newAccessToken: string, newRefreshToken: string, newUser: User) => {
+    localStorage.setItem(TOKEN_KEY, newAccessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+    
+    setAccessToken(newAccessToken);
+    setRefreshToken(newRefreshToken);
+    setUser(newUser);
   };
 
   const logout = async () => {
@@ -194,6 +208,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     signup,
     logout,
     refreshAccessToken,
+    setTokens,
     isAuthenticated: !!user && !!accessToken,
   };
 
