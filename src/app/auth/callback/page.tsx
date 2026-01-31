@@ -15,18 +15,14 @@ function AuthCallbackContent() {
     const refreshToken = searchParams.get('refreshToken');
 
     if (accessToken && refreshToken) {
-      // Store tokens
-      localStorage.setItem('cms_access_token', accessToken);
-      localStorage.setItem('cms_refresh_token', refreshToken);
-      
-      // Fetch user data
-      fetchUserData(accessToken);
+      // Fetch user data and set everything via context
+      fetchUserData(accessToken, refreshToken);
     } else {
       setError('Authentication failed. Please try again.');
     }
   }, [searchParams]);
 
-  const fetchUserData = async (token: string) => {
+  const fetchUserData = async (token: string, refreshTok: string) => {
     try {
       // Decode token to get user info (JWT payload)
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -36,7 +32,8 @@ function AuthCallbackContent() {
         name: payload.name,
       };
 
-      localStorage.setItem('cms_user', JSON.stringify(user));
+      // Use setTokens from UserContext to properly set all state
+      setTokens(token, refreshTok, user);
       
       // Redirect to files page
       router.push('/files');
