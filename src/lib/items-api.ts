@@ -8,6 +8,7 @@ import {
   UploadUrlResponse,
   DownloadUrlResponse,
   StorageUsage,
+  SummarizeFileResponse,
 } from '@/types/items';
 
 class ItemsApi {
@@ -305,6 +306,10 @@ class ItemsApi {
 
   async getStorageUsage(): Promise<StorageUsage> {
     return apiClient.get<StorageUsage>(`${this.baseUrl}/storage-usage`);
+  }
+
+  async summarizeFile(id: string): Promise<SummarizeFileResponse> {
+    return apiClient.post<SummarizeFileResponse>(`${this.baseUrl}/${id}/summarize`, {});
   }
 }
 

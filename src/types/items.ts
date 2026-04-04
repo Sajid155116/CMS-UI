@@ -56,3 +56,11 @@ export interface StorageUsage {
   total: number;
   count: number;
 }
+
+export interface SummarizeFileResponse {
+  itemId: string;
+  filename: string;
+  summary: string;
+  sources: string[];
+  summarizerDocumentId: string;
+}

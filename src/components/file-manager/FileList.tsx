@@ -6,6 +6,12 @@ import { itemsApi } from '@/lib/items-api';
 import { formatDate } from '@/lib/utils';
 import { VideoPreviewModal } from './VideoPreviewModal';
 
+type SummaryResult = {
+  filename: string;
+  summary: string;
+  sources: string[];
+};
+
 interface FileListProps {
   items: Item[];
   viewMode: 'grid' | 'list';
@@ -20,6 +26,8 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number } | null>(null);
   const [videoPreview, setVideoPreview] = useState<{ url: string; name: string } | null>(null);
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
 
   const handleDownload = async (item: Item) => {
     if (item.type === ItemType.FOLDER) return;
@@ -82,6 +90,42 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
     } catch (error) {
       console.error('Failed to preview file:', error);
       alert('Failed to preview file');
+    }
+  };
+
+  const canSummarize = (item: Item) => {
+    if (item.type !== ItemType.FILE) return false;
+
+    const extension = item.name.split('.').pop()?.toLowerCase() || '';
+    const mimeType = item.mimeType || '';
+
+    if (mimeType === 'application/pdf' || extension === 'pdf') return true;
+    if (mimeType.startsWith('text/')) return true;
+
+    return ['txt', 'md', 'markdown', 'rst', 'readme', 'log'].includes(extension);
+  };
+
+  const handleSummarize = async (item: Item) => {
+    if (!canSummarize(item)) {
+      alert('Summarization supports PDF and text-based files only.');
+      return;
+    }
+
+    try {
+      setSummarizingId(item.id);
+      const response = await itemsApi.summarizeFile(item.id);
+      setSummaryResult({
+        filename: response.filename,
+        summary: response.summary,
+        sources: response.sources,
+      });
+    } catch (error: any) {
+      console.error('Failed to summarize file:', error);
+      const backendMessage =
+        error?.response?.data?.message || error?.response?.data?.detail || error?.message;
+      alert(backendMessage || 'Failed to summarize file');
+    } finally {
+      setSummarizingId(null);
     }
   };
 
@@ -235,6 +279,28 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
   if (viewMode === 'grid') {
     return (
       <>
+        {summaryResult && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-3xl rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Summary</h3>
+                <button
+                  onClick={() => setSummaryResult(null)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label="Close summary"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{summaryResult.filename}</p>
+                <div className="whitespace-pre-wrap text-sm leading-6 text-gray-800 dark:text-gray-200">
+                  {summaryResult.summary}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {videoPreview && (
           <VideoPreviewModal
             videoUrl={videoPreview.url}
@@ -312,6 +378,22 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                     </button>
+                    {canSummarize(item) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSummarize(item);
+                        }}
+                        type="button"
+                        disabled={summarizingId === item.id}
+                        className="p-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-60"
+                        title="Summarize"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h8" />
+                        </svg>
+                      </button>
+                    )}
                   </>
                 )}
                 <button
@@ -349,7 +431,30 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
 
   // List View
   return (
-    <div className="overflow-x-auto">
+    <>
+      {summaryResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-3xl rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Summary</h3>
+              <button
+                onClick={() => setSummaryResult(null)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                aria-label="Close summary"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{summaryResult.filename}</p>
+              <div className="whitespace-pre-wrap text-sm leading-6 text-gray-800 dark:text-gray-200">
+                {summaryResult.summary}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
@@ -428,6 +533,19 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
                       >
                         {downloadingId === item.id ? 'Downloading...' : 'Download'}
                       </button>
+                      {canSummarize(item) && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSummarize(item);
+                          }}
+                          type="button"
+                          disabled={summarizingId === item.id}
+                          className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50 transition-colors"
+                        >
+                          {summarizingId === item.id ? 'Summarizing...' : 'Summarize'}
+                        </button>
+                      )}
                     </>
                   )}
                   <button
@@ -449,5 +567,6 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
         </tbody>
       </table>
     </div>
+    </>
   );
 }
