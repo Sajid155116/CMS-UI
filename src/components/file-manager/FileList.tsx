@@ -45,6 +45,7 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
   const [videoPreview, setVideoPreview] = useState<{ url: string; name: string } | null>(null);
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [summaryResult, setSummaryResult] = useState<SummaryResult | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const handleDownload = async (item: Item) => {
@@ -113,11 +114,12 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
 
   const handleSummarize = async (item: Item) => {
     if (!canSummarize(item)) {
-      alert('Summarization supports PDF and text-based files only.');
+      setSummaryError('Summarization supports PDF and text-based files only.');
       return;
     }
 
     try {
+      setSummaryError(null);
       setSummarizingId(item.id);
       const response = await itemsApi.summarizeFile(item.id);
       setSummaryResult({
@@ -129,7 +131,8 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
       console.error('Failed to summarize file:', error);
       const backendMessage =
         error?.response?.data?.message || error?.response?.data?.detail || error?.message;
-      alert(backendMessage || 'Failed to summarize file');
+      setSummaryError(backendMessage || 'Failed to summarize file');
+      setSummaryResult(null);
     } finally {
       setSummarizingId(null);
     }
@@ -196,6 +199,22 @@ export function FileList({ items, viewMode, onFolderClick, onDelete, onRename }:
 
   return (
     <>
+      {summaryError && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+          <div className="flex items-start justify-between gap-3">
+            <p>{summaryError}</p>
+            <button
+              type="button"
+              onClick={() => setSummaryError(null)}
+              className="text-rose-700 transition-colors hover:text-rose-900 dark:text-rose-200 dark:hover:text-white"
+              aria-label="Dismiss summary error"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       {summaryResult && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-3xl rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">

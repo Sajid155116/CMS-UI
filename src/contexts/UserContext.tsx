@@ -73,7 +73,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const response = await fetch(`${apiUrl}/users/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -166,7 +166,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const response = await fetch(`${apiUrl}/users/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -189,7 +189,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const signup = async (email: string, password: string, name?: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
       const response = await fetch(`${apiUrl}/users/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,7 +217,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       if (refreshToken) {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
         await fetch(`${apiUrl}/users/logout`, {
           method: 'POST',
           headers: {
