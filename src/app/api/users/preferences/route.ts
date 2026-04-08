@@ -44,9 +44,20 @@ export async function PATCH(request: NextRequest) {
 
     await dbConnect();
     
+    const existingUser = await User.findById(token.id);
+
+    if (!existingUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const mergedPreferences = {
+      ...(existingUser.preferences || {}),
+      ...body,
+    };
+
     const user = await User.findByIdAndUpdate(
       token.id,
-      { $set: { preferences: body } },
+      { $set: { preferences: mergedPreferences } },
       { new: true }
     );
     

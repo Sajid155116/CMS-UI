@@ -1,18 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { AUTHENTICATED_HOME_ROUTE, UNAUTHENTICATED_HOME_ROUTE } from '@/lib/routes';
+import { getJwtExpiryMs } from '@/lib/jwt';
 
 interface User {
   id: string;
   email: string;
   name?: string;
-}
-
-interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
 }
 
 interface UserContextType {
@@ -33,6 +29,7 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 const TOKEN_KEY = 'cms_access_token';
 const REFRESH_TOKEN_KEY = 'cms_refresh_token';
 const USER_KEY = 'cms_user';
+const REFRESH_SKEW_MS = 60_000;
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -40,32 +37,132 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const refreshTimerRef = useRef<number | null>(null);
 
-  // Load tokens and user from localStorage on mount
-  useEffect(() => {
-    const storedAccessToken = localStorage.getItem(TOKEN_KEY);
-    const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
-    const storedUser = localStorage.getItem(USER_KEY);
-
-    if (storedAccessToken && storedRefreshToken && storedUser) {
-      setAccessToken(storedAccessToken);
-      setRefreshToken(storedRefreshToken);
-      setUser(JSON.parse(storedUser));
+  const clearRefreshTimer = () => {
+    if (refreshTimerRef.current !== null) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
     }
-    setLoading(false);
-  }, []);
+  };
 
-  // Setup token refresh interval
+  const clearStoredSession = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+  };
+
+  const hardLogout = async (redirectToLogin: boolean) => {
+    clearRefreshTimer();
+    clearStoredSession();
+
+    setAccessToken(null);
+    setRefreshToken(null);
+    setUser(null);
+
+    if (redirectToLogin) {
+      router.replace(UNAUTHENTICATED_HOME_ROUTE);
+    }
+  };
+
+  const performRefreshAccessToken = async (overrideRefreshToken?: string): Promise<string | null> => {
+    const tokenToRefresh = overrideRefreshToken ?? refreshToken;
+
+    if (!tokenToRefresh) {
+      return null;
+    }
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/users/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: tokenToRefresh }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Token refresh failed');
+      }
+
+      const data = await response.json();
+      updateSession(data.accessToken, data.refreshToken);
+      return data.accessToken;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      await hardLogout(true);
+      return null;
+    }
+  };
+
+  const scheduleRefresh = (nextAccessToken: string, nextRefreshToken: string) => {
+    clearRefreshTimer();
+
+    const expiryMs = getJwtExpiryMs(nextAccessToken);
+    if (!expiryMs) {
+      return;
+    }
+
+    const delayMs = Math.max(expiryMs - Date.now() - REFRESH_SKEW_MS, 0);
+    refreshTimerRef.current = window.setTimeout(() => {
+      void performRefreshAccessToken(nextRefreshToken);
+    }, delayMs);
+  };
+
+  const updateSession = (nextAccessToken: string, nextRefreshToken: string, nextUser?: User) => {
+    localStorage.setItem(TOKEN_KEY, nextAccessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, nextRefreshToken);
+
+    if (nextUser) {
+      localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
+      setUser(nextUser);
+    }
+
+    setAccessToken(nextAccessToken);
+    setRefreshToken(nextRefreshToken);
+    scheduleRefresh(nextAccessToken, nextRefreshToken);
+  };
+
   useEffect(() => {
-    if (!accessToken || !refreshToken) return;
+    const initializeSession = async () => {
+      const storedAccessToken = localStorage.getItem(TOKEN_KEY);
+      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+      const storedUser = localStorage.getItem(USER_KEY);
 
-    // Refresh token every 14 minutes (access token expires in 15 minutes)
-    const refreshInterval = setInterval(() => {
-      refreshAccessToken();
-    }, 14 * 60 * 1000);
+      if (!storedAccessToken || !storedRefreshToken || !storedUser) {
+        setLoading(false);
+        return;
+      }
 
-    return () => clearInterval(refreshInterval);
-  }, [accessToken, refreshToken]);
+      try {
+        const parsedUser = JSON.parse(storedUser) as User;
+        const accessExpiryMs = getJwtExpiryMs(storedAccessToken);
+        const refreshExpiryMs = getJwtExpiryMs(storedRefreshToken);
+
+        if (refreshExpiryMs !== null && refreshExpiryMs <= Date.now()) {
+          await hardLogout(false);
+          return;
+        }
+
+        updateSession(storedAccessToken, storedRefreshToken, parsedUser);
+
+        if (accessExpiryMs !== null && accessExpiryMs <= Date.now()) {
+          await performRefreshAccessToken(storedRefreshToken);
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+        await hardLogout(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void initializeSession();
+
+    return () => {
+      clearRefreshTimer();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const login = async (email: string, password: string) => {
     try {
@@ -82,17 +179,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      
-      // Store tokens and user
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-
-      setAccessToken(data.accessToken);
-      setRefreshToken(data.refreshToken);
-      setUser(data.user);
-
-      router.push('/files');
+      updateSession(data.accessToken, data.refreshToken, data.user);
+      router.replace(AUTHENTICATED_HOME_ROUTE);
     } catch (error: any) {
       console.error('Login error:', error);
       throw error;
@@ -102,31 +190,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const signup = async (email: string, password: string, name?: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-      
-      // Create the user (now returns tokens immediately)
-      const signupResponse = await fetch(`${apiUrl}/users/signup`, {
+      const response = await fetch(`${apiUrl}/users/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, name }),
       });
 
-      if (!signupResponse.ok) {
-        const error = await signupResponse.json();
+      if (!response.ok) {
+        const error = await response.json();
         throw new Error(error.message || 'Signup failed');
       }
 
-      const data = await signupResponse.json();
-      
-      // Store tokens and user (auto-login after signup)
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-
-      setAccessToken(data.accessToken);
-      setRefreshToken(data.refreshToken);
-      setUser(data.user);
-
-      router.push('/files');
+      const data = await response.json();
+      updateSession(data.accessToken, data.refreshToken, data.user);
+      router.replace(AUTHENTICATED_HOME_ROUTE);
     } catch (error: any) {
       console.error('Signup error:', error);
       throw error;
@@ -134,25 +211,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const setTokens = (newAccessToken: string, newRefreshToken: string, newUser: User) => {
-    localStorage.setItem(TOKEN_KEY, newAccessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    
-    setAccessToken(newAccessToken);
-    setRefreshToken(newRefreshToken);
-    setUser(newUser);
+    updateSession(newAccessToken, newRefreshToken, newUser);
   };
 
   const logout = async () => {
     try {
       if (refreshToken) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-        // Call logout endpoint to revoke refresh token
         await fetch(`${apiUrl}/users/logout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({ refreshToken }),
         });
@@ -160,50 +230,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear local state and storage
-      localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
-      
-      setAccessToken(null);
-      setRefreshToken(null);
-      setUser(null);
-      
-      router.push('/login');
+      await hardLogout(true);
     }
   };
 
   const refreshAccessToken = async (): Promise<string | null> => {
-    if (!refreshToken) return null;
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
-      const response = await fetch(`${apiUrl}/users/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Token refresh failed');
-      }
-
-      const data = await response.json();
-      
-      // Update tokens
-      localStorage.setItem(TOKEN_KEY, data.accessToken);
-      localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      
-      setAccessToken(data.accessToken);
-      setRefreshToken(data.refreshToken);
-
-      return data.accessToken;
-    } catch (error) {
-      console.error('Token refresh error:', error);
-      // If refresh fails, logout
-      await logout();
-      return null;
-    }
+    return performRefreshAccessToken();
   };
 
   const value: UserContextType = {

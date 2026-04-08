@@ -1,10 +1,21 @@
 import type { Metadata } from "next";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
+const plusJakarta = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+});
+
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-mono',
+});
+
 export const metadata: Metadata = {
-  title: "CMS - Content Management System",
-  description: "Modern content management system built with Next.js",
+  title: "CMS Studio",
+  description: "A modern content management workspace built with Next.js",
 };
 
 export default function RootLayout({
@@ -14,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">
+      <body className={`${plusJakarta.variable} ${jetBrainsMono.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

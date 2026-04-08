@@ -35,8 +35,8 @@ function AuthCallbackContent() {
       // Use setTokens from UserContext to properly set all state
       setTokens(token, refreshTok, user);
       
-      // Redirect to files page
-      router.push('/files');
+      // Redirect to the authenticated home page
+      router.replace('/dashboard');
     } catch (error) {
       console.error('Error processing authentication:', error);
       setError('Failed to complete authentication');
